@@ -1,6 +1,3 @@
-
----
-## 📄 requirements.txt (copy this 👇)
 ```txt
 pandas
 numpy
