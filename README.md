@@ -34,3 +34,4 @@ medical_no_show_project/
 ```bash
 pip install -r requirements.txt
 streamlit run app/app.py
+

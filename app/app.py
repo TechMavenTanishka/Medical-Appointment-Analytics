@@ -67,9 +67,9 @@ label {
 # =========================
 # LOAD MODELS
 # =========================
-no_show_model = joblib.load("../models/no_show_model.pkl")
-le_dict = joblib.load("../models/label_encoders.pkl")
-ts_model = joblib.load("../models/demand_forecast_model.pkl")
+no_show_model = joblib.load("models/no_show_model.pkl")
+le_dict = joblib.load("models/label_encoders.pkl")
+ts_model = joblib.load("models/demand_forecast_model.pkl")
 
 # =========================
 # HEADER
