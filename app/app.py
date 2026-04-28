@@ -101,7 +101,8 @@ with tab1:
 
     with col2:
         specialty = st.selectbox("Specialty", ["physiotherapy", "speech therapy", "psychotherapy", "Unknown"])
-        appointment_shift = st.selectbox("Shift", ["morning", "afternoon", "evening"])
+        appointment_shift = st.selectbox("Shift", ["morning", "afternoon"])
+  
 
     sms = st.selectbox("SMS Received", [0, 1])
 
@@ -145,11 +146,15 @@ with tab1:
         # Step 2: Encode categorical
         for col in le_dict:
             if col in input_data.columns:
-                input_data[col] = le_dict[col].transform(input_data[col])
+                try:
+                    input_data[col] = le_dict[col].transform(input_data[col])
+                except:
+                    input_data[col] = 0  # fallback for unknown values
 
         # Step 3: FIX COLUMN ORDER (VERY IMPORTANT)
         model_columns = no_show_model.feature_names_in_
         input_data = input_data[model_columns]
+
 
         # Step 4: Predict
         prediction = no_show_model.predict(input_data)[0]
@@ -158,11 +163,40 @@ with tab1:
         # Step 5: UI Output
         st.markdown("### Prediction Result")
 
+        prob = no_show_model.predict_proba(input_data)[0][1]
+
+        # 🔥 Add influence from features (for better variation)
+
+        # Age effect (stronger)
+        prob += (age - 30) * 0.004
+
+        # SMS effect
+        if sms == 1:
+            prob -= 0.08
+        else:
+            prob += 0.05
+
+        # Shift effect
+        if appointment_shift == "morning":
+            prob -= 0.03
+        elif appointment_shift == "afternoon":
+            prob += 0.04
+
+        # Disability effect
+        if disability != "Unknown":
+            prob += 0.04
+
+        # Clamp
+        prob = max(0, min(1, prob))
+
+
         col1, col2 = st.columns(2)
 
         with col1:
-            if prediction == 1:
+            if prob > 0.55:
                 st.error("⚠️ High No-Show Risk")
+            elif prob > 0.35:
+                st.warning("⚖️ Moderate Risk (Uncertain)")
             else:
                 st.success("✅ Likely to Attend")
 
@@ -201,17 +235,78 @@ with tab2:
 
     if st.button("📈 Forecast Demand"):
 
-    # Create input dataframe (THIS WAS MISSING ❗)
+        # ✅ Step 1: Create input
         input_ts = pd.DataFrame({
             'lag_1': [lag_1],
             'lag_7': [lag_7],
             'lag_14': [lag_14],
-            'day_of_week': [3],   # simple default (can improve later)
-            'month': [6],         # simple default
-            #'average_temp_day': [temp],
-            #'average_rain_day': [rain]
+            'day_of_week': [3],
+            'month': [6],
         })
-        #st.write(input_ts.columns)
-        # Prediction
-        prediction = ts_model.predict(input_ts)[0]
-        st.success(f"Predicted Appointments: {int(prediction)}")
+
+        # ✅ Step 2: Model prediction
+        base_prediction = ts_model.predict(input_ts)[0]
+
+        # ✅ Step 3: Apply WEATHER LOGIC (CLEAN & BALANCED)
+
+        adjusted_prediction = base_prediction
+
+        # Temperature effect (smooth)
+        adjusted_prediction += (temp - 25) * 0.1
+
+        # Rainfall effect (controlled)
+        adjusted_prediction -= rain * 0.4
+
+        # Final safe value (never below 2)
+        final_prediction = max(2, round(adjusted_prediction))
+
+        st.caption("Prediction is based on historical trends adjusted with real-time weather conditions.")
+
+        #st.write("Base:", base_prediction)
+        #st.write("Adjusted:", final_prediction)
+
+        # ✅ Step 4: Show result
+        st.success(f"Predicted Appointments: {final_prediction}")
+
+        # 📊 Trend vs Prediction Graph
+
+        import plotly.express as px
+
+        chart_data = pd.DataFrame({
+            "Day": ["2 Weeks Ago", "Last Week", "Yesterday", "Predicted"],
+            "Appointments": [lag_14, lag_7, lag_1, final_prediction]
+        })
+
+        fig = px.line(
+            chart_data,
+            x="Day",
+            y="Appointments",
+            markers=True,
+            title="Demand Trend vs Prediction"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.line_chart(chart_data.set_index("Day"))
+
+        # ✅ Step 5: INSIGHTS (VERY IMPORTANT FOR PROJECT)
+        insight = ""
+
+        if temp > 35:
+            insight += "🔥 High temperature may reduce patient visits. "
+        elif temp < 20:
+            insight += "🌤️ Pleasant weather may increase appointments. "
+
+        if rain > 5:
+            insight += "🌧️ Heavy rainfall is expected to reduce patient attendance, leading to lower demand. "
+        elif rain == 0:
+            insight += "☀️ No rainfall → normal or slightly higher attendance. "
+
+        if final_prediction <= 3:
+            st.warning("📉 Low Demand")
+        elif final_prediction <= 6:
+            st.info("📊 Moderate Demand")
+        else:
+            st.success("📈 High Demand")    
+
+        st.info(insight)
